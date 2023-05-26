@@ -1,0 +1,447 @@
+---
+title: "MSB1011 - Machine Learning and Multivariate Statistics"
+author: "Giorgia Del Missier, i6292403"
+date: "03/06/2022"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Machine Learning for sounds classification in the brainstem: an evaluation of different methods
+
+### 1. Introduction
+
+In physics, sound is just vibration propagating through a transmission medium. Our brain, however, can perceive and process such pressure waves into behaviourally relevant signals.  
+In humans, the auditory pathway is composed of multiple neuronal structures throughout which sound is encoded with increasing complexity^1^. After travelling through the ear, sound pressure waves are first converted into action potentials in the cochlea and transmitted further through the auditory nerve. Here a first pre-processing step occurs thanks to the tonotopic organization of the neurons, which are arranged depending on their response to different frequencies^2^. The neuronal signal is then transmitted further up the auditory system, going through the cochlear nucleus (CN) and the superior olivary complex (SOC) in the brainstem, the inferior colliculus (IC) in the midbrain and the medial geniculate body (MGB) in the thalamus and finally reaching the auditory cortex (AC)^1^. Along this pathway, neurons become more and more specialized in feature tuning and categorical response to a specific sound type: in fact, in addition to tonotopic gradients, which have been identified in multiple functional areas^2^, waveforms are decomposed into frequency-specific temporal and spatial patterns. While the exact mechanisms through which complex sounds are further analyzed in the auditory neuronal pathway remains uncertain, ethological studies led to the hypothesis that brain processing of sounds is optimized for spectrotemporal modulations characteristic of ecologically relevant sounds^3^. For example, Elliot and Theunissen^4^ showed that humans respond best to a combination of low frequencies, slow temporal modulations and other sound features characteristic of human vocal sounds and speech.  
+
+Machine learning and pattern recognition techniques have been increasingly used in fMRI data analysis in order to detect voxels of brain activation which are informative with respect to a subject’s cognitive state^5,6,7,8^. The analysis of fMRI data is usually referred to as multivoxel pattern analysis and usually comprises four steps^7^. Firstly, the set of voxels, also referred to as features, is selected from all the brain areas or limited to a region-of-interest (ROI). Then, the stimulus-evoked brain activity is represented as a point in a multidimensional space and a classifier is trained on this data to find the optimal separating boundary between the different conditions, i.e. the sound categories. Finally, the accuracy of the trained classifier is tested on new data.  
+Most of such studies, however, have focused on the auditory cortex, while less is known about the different processing stages occurring in the subcortical regions^1^. Specifically, it remains unclear whether classification of sounds is feasible also at lower levels of the auditory system.
+Therefore, in this study, I will evaluate the performance of different machine learning methods on a dataset containing the fMRI response elicited by sounds belonging to seven categories, from human, animal and inanimate sources, across four ROIs in ten subjects.
+
+### 2. Material and Methods
+
+The dataset used in this study comes from the study by *Sitek et al. (2019)*^9^ focusing on responses elicited by sounds belonging to seven categories across four regions of interest in ten subjects. The sound labels are of human, animal and inanimate object origin (label 1 = speech, label 2 = voice, label 3 = animal, label 4 = music, label 5 = tool, label 6 = nature, label 7 = monkey calls). The four ROIs are the cochlear nucleus (CN), the superior olivary complex (SOC), the inferior colliculus (IC) and the medial geniculate body (MGB).  
+The dataset was already divided into training (126 sounds x number of features) and testing (42 sounds x number of features), with the corresponding labels. The seven classes are balanced.  
+Analysis of the data was performed in `R version 4.1.2`. Multiple classification algorithms were evaluated including Principal Component Analysis (`pcaMethods` package), Lasso regression (`glmnet` package) for feature selection, Linear Discriminant Analysis (`MASS` package), Naïve Bayes classifier (`klaR` package), random forest (`randomForest` package) and Support Vector Machine (`e1071` package).
+Sound categories were grouped into three classes - human (labels 1 and 2), animal (labels 3 and 7) and inanimate object (labels 4, 5 and 6) – in order to simplify the analysis. For each of the machile learning methods listed above, two comparisons were performed: human versus animal and human versus inanimate. For each, accuracies are reported.
+
+### 3. Results and Discussion
+
+#### 3.1 Principal Component Analysis
+
+Principal Component Analysis (PCA) is a dimension reduction method through which it is possible to find a low-dimensional representation of a dataset containing as much as possible of the variation. Moreover, PCA is an unsupervised approach, since it only involves a set of features and no associated response.  
+For this reason, in an inital step of the analysis, PCA was performed on the training set of subject 1, in order to possibly identify clustering in the data points and highlight similar groups belonging to the 7 sound categories in the four ROIs.
+
+```{r echo=TRUE}
+
+# Load all the needed packages for analysis
+library(R.matlab)
+library(pcaMethods)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(hrbrthemes)
+library(RColorBrewer)
+library(wesanderson)
+
+# Set the working directory
+pwd <- "~/Desktop/5.Machine Learning and Multivariate Statistics/soundBrainstem/MLassigments/subj1"
+files <- list.files(path=pwd, pattern="*.mat", full.names=TRUE, recursive=FALSE)
+
+
+brain_regions <- c("CN", "IC", "MGB", "SOC")
+plot_list <- list() 
+
+# for-loop iterating over the 4 brain regions and performing PCA
+for (f in 1:length(files)) {
+  
+  file <- readMat(files[f])
+  
+  Xtrain <- as.data.frame(file$Xtr)
+  sound.labels <- as.factor(file$Ctr)
+  levels(sound.labels) <- c("speech","voice","animal","music","tool","nature","monkey")
+
+  # Perform PCA 
+  pcaRes <- pca(Xtrain, nPcs = 10)  # first 10 PCs are retained
+
+  # Create plot data
+  plotData_pca <- cbind(data.frame(pcaRes@scores), sound.labels)
+  
+  # Create PCA plots
+  plot_list[[f]] <- ggplot(plotData_pca, aes(x = PC1, y = PC2, color = sound.labels)) + 
+    geom_point() + 
+    ggtitle(paste("PC1 vs PC2, ", brain_regions[f])) +
+    xlab(paste("PC1,", pcaRes@R2[1]*100,"% variance explained")) +
+    ylab(paste("PC2,", pcaRes@R2[2]*100,"% variance explained")) +
+    theme_ipsum() +
+    theme(
+      panel.spacing = unit(0.1, "lines"),
+      strip.text.x = element_text(size = 6)) +
+    scale_fill_brewer(palette = "Paired") +
+    scale_color_brewer(palette = "Paired")
+}
+
+grid.arrange(grobs=plot_list, ncol=2, 
+             top=textGrob("Subject 1",gp=gpar(fontsize=18,fontface="bold")))
+```
+
+![pca](~/Desktop/pca zoomed.png)
+As it can be seen in the figure above, no clear class separation was observed in none of the brain regions under consideration. Another observation that can be made is that the variance explained by the principal components always results kind of low.  
+
+In order to simplify the analysis and make the classification task more generalized, the seven sound categories were further grouped into three classes: human - including human voice and speech, animal - including animal sound and monkey calls, and inanimate objects - including nature sounds, tools and music. 
+Another PCA was performed taking into account these new categories but no clear grouping was observed, as shown below.
+
+```{r echo=TRUE}
+plot_list_grouped <- list() 
+for (f in 1:length(files)) {
+  
+  file <- readMat(files[f])
+  
+  Xtrain <- as.data.frame(file$Xtr)
+  sound.labels <- as.factor(c(rep("human",36), rep("animal", 18), rep("inanimate", 54), rep("animal", 18)))
+
+  # Perform PCA 
+  pcaRes <- pca(Xtrain, nPcs = 10)
+  
+  # Create plot data
+  plotData_pca <- cbind(data.frame(pcaRes@scores), sound.labels)
+  
+  # Create PCA plots
+  plot_list_grouped[[f]] <- ggplot(plotData_pca, aes(x = PC1, y = PC2, color = sound.labels)) + 
+    geom_point() + 
+    ggtitle(paste("PC1 vs PC2, ", brain_regions[f])) +
+    xlab(paste("PC1,", pcaRes@R2[1]*100,"% variance explained")) +
+    ylab(paste("PC2,", pcaRes@R2[2]*100,"% variance explained")) +
+    theme_ipsum() +
+    theme(
+      panel.spacing = unit(0.1, "lines"),
+      strip.text.x = element_text(size = 8)) +
+    scale_fill_manual(values = wes_palette("GrandBudapest1")) +
+    scale_color_manual(values = wes_palette("GrandBudapest1"))
+}
+grid.arrange(grobs=plot_list_grouped, ncol=2, 
+             top=textGrob("Subject 1, grouped categories",gp=gpar(fontsize=18,fontface="bold")))
+```
+![pca2](~/Desktop/pca grouped zoomed.png)
+
+It appears clear from this preliminar analysis that the low quality of the fMRI signal that is obtained in the subcortical regions of the brainstem makes the classification task harder than expected. 
+Nonetheless, classification methods could still perform quite well on such data and the question this study will try to address is whether one of them clearly outperforms the others.
+
+#### 3.2 Lasso regression
+
+Shirinkage methods aim at fitting a model in which the coefficient estimates of the predictors (or features) are shrinked towards zero. Specifically, Lasso uses a *l1*-norm penality: this has the effect of forcing some of the coefficients to be exactly zero when the tuning parameter $\lambda$ is sufficiently large, thus performing feature selection. Creating a sparse model, i.e. a model that only involves a subset of the variables, decreases variance while also producing a simpler and more interpretable model. 
+Since our data contains a large number of voxels, this techique was tested in subject 1 for all the four brain regions. Two comparisons were performed. In the first, only sounds belonging to the human versus the ones from the animal categories were taken into account.
+
+Lasso regression can be performed in R using the `glmnet()` function: the *alpha* argument determines what type of model is fit (when alpha = 1, a lasso model is fit). By default the `glmnet()` function performs regression for an automatically selected range of $\lambda$ values. Here the function was implemented over a grid of values ranging from $\lambda$  = 10^10^ to $\lambda$ = 10^−2^, essentially covering the full range of scenarios from the null model containing only the intercept to the least squares fit. By default, the `glmnet()` function also standardizes the variables so that they are on the same scale.
+
+Selecting a good value for $\lambda$ is critical. In order to do this, cross-validation can be used with the built-in function `cv.glmnet()`. By default, the function performs ten-fold cross-validation.
+
+The value of $\lambda$ that results in the smallest cross-validation error can then be selected and used to predict the class of the new data from the test set. The performance accuracy is then computed and stored.
+
+```{r}
+library(glmnet)
+
+# Misclassification function
+misc<-function(x,y){
+  1-sum(diag(table(x,y)))/length(x)
+}
+
+par(mfrow = c(1,2))
+
+# Create the subset of samples, including only human and animal sounds
+human.vs.animal_tr <- c(1:54, 109:126)
+human.vs.animal_te <- c(1:18, 37:42)
+
+nfeatures <- c()
+accuracies <- c()
+
+for (f in 1:length(files)) {
+  
+  file <- readMat(files[f])
+  
+  y <- as.factor(c(rep(1,36),rep(2,36)))
+  x <- as.matrix(file$Xtr[human.vs.animal_tr,])
+  test.y <- c(rep(1,12), rep(2,12))
+  test.x <- as.matrix(file$Xte[human.vs.animal_te,])
+  
+  # Estimation
+  grid <- 10^seq(10,-2, length=100)
+  lasso.mod <- glmnet(x, y, alpha=1, lambda=grid, family="binomial")
+  plot(lasso.mod)
+  
+  # Choice of lambda via CV
+  set.seed(1234)
+  cv.out<-cv.glmnet(x, y, alpha=1, family="binomial")
+  plot(cv.out)
+  
+  # Compute coefficient estimates on the full data set, using the value 
+  # of lambda chosen by cross-validation
+  best.lambda<-cv.out$lambda.min
+  lasso.coef=predict(lasso.mod,type ="coefficients",s=best.lambda)
+  nfeatures <- c(nfeatures, sum(lasso.coef!=0))
+
+  # Perform prediction on test set using the best lambda
+  lasso.pred<-predict(lasso.mod, s=best.lambda, newx=test.x,type="class")
+  
+  # Compute accuracy
+  accuracies <- c(accuracies, 1-misc(lasso.pred,test.y))
+  
+}
+
+human.vs.animal_lasso <- data.frame(nfeatures,round(accuracies, digits = 2))
+rownames(human.vs.animal_lasso) <- c("CN", "IC", "MGB", "SOC")
+colnames(human.vs.animal_lasso) <- c("# features retained", "model accuracy")
+
+print(human.vs.animal_lasso)
+```
+While the final model always retaines very few features, creating a much more simple model, the final accuracy in all the brain regions is always very close to chance level (50%): this means that in half the cases, the model predicts the wrong class, thus indicating low performance. An exception can be made for the medial geniculate body, the ROI with the highest accuracy (62%): this result agrees well with the notion that higher brain regions encode sound feature with increasing complexity and thus along the auditory pathway sounds will become more and more easier to decode and group.
+
+The second comparison performed included human versus inanimate object and followed the same steps described above.
+
+```{r}
+
+# Create the subset of samples, including only human and inanimate sounds
+human.vs.inanimate_tr <- c(1:36, 55:108)
+human.vs.inanimate_te <- c(1:12, 19:36)
+
+nfeatures <- c()
+accuracies <- c()
+
+par(mfrow = c(1,2))
+
+for (f in 1:length(files)) {
+  
+  file <- readMat(files[f])
+  
+  y <- as.factor(c(rep(1,36),rep(2,54)))
+  x <- as.matrix(file$Xtr[human.vs.inanimate_tr,])
+  test.y <- c(rep(1,12), rep(2,18))
+  test.x <- as.matrix(file$Xte[human.vs.inanimate_te,])
+  
+  # Estimation
+  grid<-10^seq(10,-2, length=100)
+  lasso.mod=glmnet(x, y, alpha=1, lambda=grid,family="binomial")
+  plot(lasso.mod)
+  
+  # Choice of lambda via CV
+  set.seed(1234)
+  cv.out<-cv.glmnet(x, y,alpha=1,family="binomial")
+  plot(cv.out)
+  
+  # Compute coefficient estimates on the full data set, using the value 
+  # of lambda chosen by cross-validation
+  best.lambda<-cv.out$lambda.min
+  lasso.coef=predict(lasso.mod,type ="coefficients",s=best.lambda)
+  nfeatures <- c(nfeatures, sum(lasso.coef!=0))
+  
+   # Perform prediction on test set using the best lambda
+  lasso.pred<-predict(lasso.mod, s=best.lambda, newx=test.x,type="class")
+  
+  # Compute accuracy
+  accuracies <- c(accuracies, 1-misc(lasso.pred,test.y))
+  
+}
+
+human.vs.inanimate_lasso <- data.frame(nfeatures,round(accuracies, digits = 2))
+rownames(human.vs.inanimate_lasso) <- c("CN", "IC", "MGB", "SOC")
+colnames(human.vs.inanimate_lasso) <- c("# features retained", "model accuracy")
+
+print(human.vs.inanimate_lasso)
+```
+In this case, the model seems to perform much better than before, except for the inferior colliculus where accuracy is even lower than 50%. 
+These results agree well with the ethological hypothesis described in the introduction: the human brain is optimized for fine-grained analysis of the most behaviorally relevant sounds and thus, in this case, encoding and discrimination of sounds from human sources seem to occur already at subcortical levels and appear to be very distiguished when compared to sounds coming from non-living objects.
+
+#### 3.3 Linear Discrimant Analysis, Naive Bayes, Random Forest and Support Vector Machines: a full comparison
+
+To further investigate the possibility of using a machine learning algorithm to classify sound objects already at the brainstem level, other classical methods used in the classification setting were tested. These include:
+
+* Linear Discriminant Analysis (LDA): this method is a popular alternative to logistic regression approaches and the Bayes classifier. In R, it can be performed through the `lda()` function.
+
+* Naive Bayes: this classifier is especially appropriate when the dimension of the feature space
+is high. It assumes that all features are independent: while generally not true, this simplifies the estimation drastically. In R, it can be performed with the `NaiveBayes()` function. In this case, two version were tested, i.e. with and without the use of a kernel density estimation.
+
+* Random Forest: tree-based methods involve stratifying the predictor space into a number of simple regions; however, they often suffer from high variance. Random forests aim at reducing it by constructing many trees and averaging the resulting predictions, while also decorrelating the trees by using only a subset of predictors at each split. In R, the `randomForest()` function can be used.
+
+* Support Vector Machine (SVM): this methods tries to construct a p-dimensional separating hyperplane that is farthest from the training observations. However, the support vector margines are "soft", meaning that some observations are allowed to be on the incorrect side of the hyperplane, avoiding overfitting. The total amount of these observations is determined by a cost function and is usually chosen by cross-validation. Moreover, the feature space can be enlarged through the use of kernels. In R, the `svm()` function can be used to perform this kind of analysis. Moreover the `e1071` package also provides a built-in function,`tune()`, to perform cross-validation. By default, `tune()` performs ten-fold cross-validation on a set of models of interest. In this case, a grid of possible cost values were tested as well as the three kernels (linear, polynomial and radial). The best parameters emerging from this analysis are then used for classification.
+(N.B. since the feature space is vast, the `tune()` function takes some time to run)
+
+Also in this case, two comparisons were made: first, human versus animal sounds and second, human versus non-living.
+
+```{r}
+library(MASS)
+library(klaR)
+library(randomForest)
+library(e1071)
+
+human.vs.animal_summary <- data.frame(matrix(nrow = 4, ncol = 5))
+
+for (f in 1:length(files)) {
+  
+  file <- readMat(files[f])
+  
+  # File preparation
+  y <- c(rep(1,36),rep(2,36))
+  x <- as.matrix(file$Xtr[human.vs.animal_tr,])
+  train <- data.frame(y=as.factor(y),x)
+  
+  test.y <- c(rep(1,12), rep(2,12))
+  test.x <- as.data.frame(file$Xte[human.vs.animal_te,])
+  colnames(test.x) <- colnames(train[,2:ncol(train)])
+  
+  accuracies <- c()
+  
+  # LDA
+  
+  out_lda <- lda(y~.,train)
+  
+  y_lda <- predict(out_lda,newdata = test.x)$class
+  accuracies <- c(accuracies, 1-misc(y_lda,test.y))
+  
+  # Naive Bayes
+  
+  out_bay_k <- NaiveBayes(x=x,grouping = as.factor(y),usekernel = TRUE)
+  out_bay_n <- NaiveBayes(x=x,grouping = as.factor(y),usekernel = FALSE)
+  
+  pred_k <- predict(out_bay_k,newdata = test.x)$class
+  pred_n <- predict(out_bay_n,newdata = test.x)$class
+  accuracies <- c(accuracies, 1-misc(pred_k,test.y), 1-misc(pred_n,test.y))
+  
+  # Random Forest
+  
+  set.seed(1234)
+  out_rf <- randomForest(y~.,train,importance =TRUE)
+  varImpPlot(out_rf)
+  
+  y_rf <- predict(out_rf, newdata = test.x)
+  accuracies <- c(accuracies, 1-misc(y_rf,test.y))
+
+  # SVM
+  
+  # Choosing the kernel and cost function
+  set.seed(1234)
+  c <- grid<-10^seq(10,-2, length=10)
+  tune_out <- tune(svm,y~.,data=train,
+                 ranges=list(kernel=c("linear","polynomial","radial"),
+                             cost=c))
+  
+  # Best model is used for prediction in the test set
+  bestmod <- tune_out$best.model
+  y_svm <- predict(bestmod,test.x)
+  accuracies <- c(accuracies, 1-misc(y_svm,test.y))
+  
+  # Add to summary table
+  human.vs.animal_summary[f,] <- accuracies
+}
+
+human.vs.animal_summary <- round(human.vs.animal_summary, digits = 2)
+colnames(human.vs.animal_summary) <- c("LDA", "Naive Bayes\n (with kernel)", "Naive Bayes", "Random Forest","SVM")
+rownames(human.vs.animal_summary) <- c("CN", "IC", "MGB", "SOC")
+
+print(human.vs.animal_summary)
+```
+
+It appears clear from the table below that none of the methods tested clearly outperforms all the others. While for the cochlear nucleus the highest accuracy is achieved through LDA (58%), SVM performs best in the inferior colliculus (58%) and in the superior olivary complex (58%); Naive Bayes with kernel density estimation is the best classifier for the medial geniculate body (58%). Moreover, most of the performances are just above chance level but reach higher accuracies when compared to the Lasso regression - except for MGB. 
+In addition, the trend according to which superior cortical areas encode sounds with increasing detail and are thus easier to decode is not observed in these results: in fact, the same misclassification rates are observed in each of the ROI under analysis.
+
+
+```{r}
+human.vs.inanimate_summary <- data.frame(matrix(nrow = 4, ncol = 5))
+
+for (f in 1:length(files)) {
+  
+  # File preparation
+  file <- readMat(files[f])
+  
+  y <- c(rep(1,36),rep(2,54))
+  x <- as.matrix(file$Xtr[human.vs.inanimate_tr,])
+  train <- data.frame(y=as.factor(y),x)
+  
+  test.y <- c(rep(1,12), rep(2,18))
+  test.x <- as.data.frame(file$Xte[human.vs.inanimate_te,])
+  colnames(test.x) <- colnames(train[,2:ncol(train)])
+  
+  accuracies <- c()
+  
+  # LDA
+  
+  out_lda<-lda(y~.,train)
+  
+  y_lda <- predict(out_lda,newdata = test.x)$class
+  accuracies <- c(accuracies, 1-misc(y_lda,test.y))
+  
+  # Naive Bayes
+  
+  out_bay_k <- NaiveBayes(x=x,grouping = as.factor(y),usekernel = TRUE)
+  out_bay_n <- NaiveBayes(x=x,grouping = as.factor(y),usekernel = FALSE)
+  
+  pred_k <- predict(out_bay_k,newdata=test.x)$class
+  pred_n <- predict(out_bay_n,newdata=test.x)$class
+  accuracies <- c(accuracies, 1-misc(pred_k,test.y), 1-misc(pred_n,test.y))
+  
+  # Random Forest
+  
+  set.seed(1234)
+  out_rf <- randomForest(y~.,train,importance =TRUE)
+  varImpPlot(out_rf)
+  
+  y_rf <- predict(out_rf, newdata = test.x)
+  accuracies <- c(accuracies, 1-misc(y_rf,test.y))
+  
+  # SVM
+  
+  # Choosing the kernel and the cost function
+  set.seed(1234)
+  c <- grid<-10^seq(10,-2, length=10)
+  tune_out<-tune(svm,y~.,data=train,
+                 ranges=list(kernel=c("linear","polynomial","radial"),
+                             cost=c))
+  
+  # Best model is used for prediction in the test set
+  bestmod<-tune_out$best.model
+  y_svm<-predict(bestmod,test.x)
+  accuracies <- c(accuracies, 1-misc(y_svm,test.y))
+  
+  # Add to summary
+  human.vs.inanimate_summary[f,] <- accuracies
+}
+
+human.vs.inanimate_summary <- round(human.vs.inanimate_summary, digits = 2)
+colnames(human.vs.inanimate_summary) <- c("LDA", "Naive Bayes (with kernel)", "Naive Bayes", "Random Forest", "SVM")
+rownames(human.vs.inanimate_summary) <- c("CN", "IC", "MGB", "SOC")
+
+print(human.vs.inanimate_summary)
+```
+
+Also in this case, no machine learning approach clearly outperforms the others in the classification task. However, as in the case with Lasso regression, accuracies have increased, again confirming the ethological hypothesis of human brain sound recognition. In fact, for each ROI, an accuracy of almost 70% is achieved.
+
+### Conclusions
+
+From this study, we can conclude that classification of sounds in low brain regions appears to be a difficult task, for which no single machine learning algorithm can be identified as the best.
+While the dataset contained fMRI data from 10 subjects, here only one was taken into consideration due to time restrains of the code run. However, it needs to be pointed out that since the results from this study do not lead to a clear identification of a best classifier, a single model could not be fit to the other data points.
+Furthermore, we can speculate that similar results would also be obtained for the other subjects, with better results for ecologially relevant for behaviourally relevant sounds when compared to non-living objects but no clear trend with regards to model accuracy.
+
+### References
+
+1. Shamma, S. A., & Micheyl, C. (2010). Behind the scenes of auditory perception. In Current Opinion in Neurobiology (Vol. 20, Issue 3, pp. 361–366). Elsevier BV. https://doi.org/10.1016/j.conb.2010.03.009
+
+2. Humphries, C., Liebenthal, E., & Binder, J. R. (2010). Tonotopic organization of human auditory cortex. In NeuroImage (Vol. 50, Issue 3, pp. 1202–1211). Elsevier BV. https://doi.org/10.1016/j.neuroimage.2010.01.046
+
+3. Santoro, R., Moerel, M., De Martino, F., Valente, G., Ugurbil, K., Yacoub, E., & Formisano, E. (2017). Reconstructing the spectrotemporal modulations of real-life sounds from fMRI response patterns. In Proceedings of the National Academy of Sciences (Vol. 114, Issue 18, pp. 4799–4804). Proceedings of the National Academy of Sciences. https://doi.org/10.1073/pnas.1617622114
+
+4. Elliott, T. M., & Theunissen, F. E. (2009). The Modulation Transfer Function for Speech Intelligibility. In K. J. Friston (Ed.), PLoS Computational Biology (Vol. 5, Issue 3, p. e1000302). Public Library of Science (PLoS). https://doi.org/10.1371/journal.pcbi.1000302
+
+5. De Martino, F., Valente, G., Staeren, N., Ashburner, J., Goebel, R., & Formisano, E. (2008). Combining multivariate voxel selection and support vector machines for mapping and classification of fMRI spatial patterns. In NeuroImage (Vol. 43, Issue 1, pp. 44–58). Elsevier BV. https://doi.org/10.1016/j.neuroimage.2008.06.037
+
+6. Haxby, J. V., Gobbini, M. I., Furey, M. L., Ishai, A., Schouten, J. L., & Pietrini, P. (2001). Distributed and overlapping representations of faces and objects in ventral temporal cortex. Science, 293(5539), 2425-2430. DOI: 10.1126/science.106373
+
+7. Norman, K. A., Polyn, S. M., Detre, G. J., & Haxby, J. V. (2006). Beyond mind-reading: multi-voxel pattern analysis of fMRI data. Trends in cognitive sciences, 10(9), 424-430. https://doi.org/10.1016/j.tics.2006.07.005
+
+8. Haynes, J. D., & Rees, G. (2006). Decoding mental states from brain activity in humans. Nature Reviews Neuroscience, 7(7), 523-534. https://doi.org/10.1038/nrn1931
+
+9. Sitek, K. R., Gulban, O. F., Calabrese, E., Johnson, G. A., Lage-Castellanos, A., Moerel, M., Ghosh, S. S., & De Martino, F. (2019). Mapping the human subcortical auditory system using histology, postmortem MRI and in vivo MRI at 7T. In eLife (Vol. 8). eLife Sciences Publications, Ltd. https://doi.org/10.7554/elife.48932
+
