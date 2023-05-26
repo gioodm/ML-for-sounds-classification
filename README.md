@@ -18,11 +18,11 @@ test data (Xte) of size: 42 test sound x num of voxels (features) and the corres
 difficult classification task due to the low quality of the fMRI signal in the brainstem. We do not expect to obtain high values 
 for the classification accuracy. 
 
-MSB1011 - Machine Learning and Multivariate Statistics
+MSB1011 - Machine Learning and Multivariate Statistics\
 Final Assignment
 
 ### Author 
 
-Giorgia Del Missier
+Giorgia Del Missier\
 i6292403
 
